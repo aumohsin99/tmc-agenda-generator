@@ -1,0 +1,29 @@
+{
+  "club": {
+    "name": "LAHORE TOASTMASTERS CLUB - 01214038",
+    "vision": "We empower individuals to become more effective communicators and leaders.",
+    "mission": "We provide a supportive and positive learning experience in which members are empowered to develop communication and leadership skills, resulting in greater self-confidence and personal growth.",
+    "meeting_time": "3:00 PM",
+    "location": "WORK by Kickstart Co-Working, 8-A New Muslim Town, Canal Road, Lahore",
+    "meeting_days": "We meet 1st and 3rd Saturday of the month at 3:00 PM",
+    "social_connect": "Our club is very active on social media. We post regular updates on LinkedIn, Facebook, and Instagram. Search for \"Lahore Toastmasters Club\" and follow us on your favorite social media channel."
+  },
+  "committee": [
+    {"designation": "President", "name": "Dr. Bashir Ahmad"},
+    {"designation": "VP Education", "name": "Hira Ashfaq"},
+    {"designation": "VP Membership", "name": "DTM Saif Ali Sheikh"},
+    {"designation": "VP Public Relations", "name": "Zain Bin Shahid"},
+    {"designation": "Secretary", "name": "Asad Zia"},
+    {"designation": "Treasurer", "name": "DTM Saif Ali Sheikh"},
+    {"designation": "Sergeant at Arms", "name": "Zain Bin Shahid"}
+  ],
+  "members": [
+    "Dr. Bashir Ahmad",
+    "Hira Ashfaq",
+    "DTM Saif Ali Sheikh",
+    "Zain Bin Shahid",
+    "Asad Zia",
+    "Sohail Jibran",
+    "Umar Ibrahim"
+  ]
+}

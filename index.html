@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toastmasters Agenda Generator</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" integrity="sha384-tViUnnbYAV00FLIhhi3v/dWt3Jxw4gZQcNoSCxCIFNJVCx7/D55/wXsrNIRANwdD" crossorigin="anonymous">
+  <style>
+    :root {
+      --tm-red:  #AC1623;
+      --tm-red2: #8B0E18;
+      --tm-gold: #E8A020;
+      --tm-dark: #1A1A1A;
+    }
+    body { background: #f5f5f5; font-size: 0.92rem; }
+    .navbar { background: var(--tm-red) !important; }
+    .navbar-brand { color: #fff !important; font-weight: 700; letter-spacing: .5px; }
+    .navbar-brand span { color: var(--tm-gold); }
+    .nav-tabs .nav-link { color: var(--tm-dark); font-weight: 500; }
+    .nav-tabs .nav-link.active { color: var(--tm-red); border-bottom: 3px solid var(--tm-red); font-weight: 700; }
+    .section-card { background: #fff; border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.1rem; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    .section-title { font-weight: 700; color: var(--tm-red); font-size: .8rem; text-transform: uppercase; letter-spacing: .8px; border-bottom: 2px solid var(--tm-gold); padding-bottom: .35rem; margin-bottom: 1rem; }
+    .speaker-card { background: #EBF5FB; border: 1px solid #AED6F1; border-radius: 8px; padding: 1rem 1.2rem; margin-bottom: .8rem; }
+    .speaker-card .badge { background: var(--tm-red) !important; }
+    .tt-card { background: #E8F8F5; border: 1px solid #76D7C4; border-radius: 8px; padding: 1rem 1.2rem; }
+    .btn-tm-red  { background: var(--tm-red); color: #fff; border: none; }
+    .btn-tm-red:hover { background: var(--tm-red2); color: #fff; }
+    .btn-tm-gold { background: var(--tm-gold); color: #fff; border: none; font-weight: 600; }
+    .btn-tm-gold:hover { background: #b8933f; color: #fff; }
+    .btn-add { border: 2px dashed var(--tm-red); color: var(--tm-red); background: transparent; border-radius: 6px; font-size: .82rem; font-weight: 600; }
+    .btn-add:hover { background: #fbecec; color: var(--tm-red); }
+    #toast-container { position: fixed; top: 72px; right: 18px; z-index: 9999; }
+    .toast { min-width: 260px; }
+    .committee-row td { vertical-align: middle; padding: .4rem .5rem; }
+    .committee-row input { font-size: .88rem; }
+    .member-select { cursor: pointer; }
+    label { font-weight: 500; }
+    @media (max-width: 575px) {
+      input, select, textarea, .form-control, .form-control-sm { font-size: 1rem !important; }
+      .section-card { padding: .9rem .85rem; }
+      #toast-container { right: 8px; left: 8px; }
+      .toast { min-width: unset; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand px-3 py-2 sticky-top" style="flex-wrap:wrap;row-gap:.4rem;">
+  <span class="navbar-brand" style="flex:1 1 0;min-width:0;white-space:normal;margin-right:.5rem;">
+    <i class="bi bi-mic-fill me-1" style="color:var(--tm-gold)"></i>
+    <span>Toastmasters Club <span>Meeting Agenda Generator</span></span>
+  </span>
+  <div class="d-flex flex-column gap-2 flex-shrink-0">
+    <button class="btn btn-sm btn-outline-light" onclick="newMeeting()">
+      <i class="bi bi-plus-circle"></i><span class="ms-1">New Meeting</span>
+    </button>
+    <button class="btn btn-sm btn-tm-gold" onclick="saveDraft()">
+      <i class="bi bi-floppy"></i><span class="ms-1">Save Draft</span>
+    </button>
+    <button class="btn btn-sm btn-light fw-semibold" onclick="generateFiles()">
+      <i class="bi bi-file-earmark-pdf" style="color:var(--tm-red)"></i><span class="ms-1">Download Agenda</span>
+    </button>
+  </div>
+</nav>
+
+<div id="toast-container"></div>
+
+<div class="container-fluid px-3 py-3" style="max-width:980px">
+  <ul class="nav nav-tabs mb-3" id="mainTab">
+    <li class="nav-item">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-meeting">
+        <i class="bi bi-calendar3 me-1"></i><span class="tab-label">Meeting Details</span>
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-club">
+        <i class="bi bi-building me-1"></i><span class="tab-label">Club Settings</span>
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+
+    <!-- TAB 1: MEETING DETAILS -->
+    <div class="tab-pane fade show active" id="tab-meeting">
+
+      <div class="section-card">
+        <div class="section-title"><i class="bi bi-info-circle me-1"></i>Meeting Information</div>
+        <div class="row g-3">
+          <div class="col-7 col-md-3">
+            <label class="form-label">Date</label>
+            <input type="date" class="form-control" id="mtg-date">
+          </div>
+          <div class="col-5 col-md-2">
+            <label class="form-label">Meeting #</label>
+            <input type="text" class="form-control" id="mtg-number" placeholder="e.g. 427" inputmode="numeric">
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label">Start Time</label>
+            <input type="text" class="form-control" id="mtg-time" placeholder="e.g. 2:00 PM" onblur="this.value = normalizeTime(this.value)">
+          </div>
+          <div class="col-12 col-md-8">
+            <label class="form-label">Theme</label>
+            <textarea class="form-control" id="mtg-theme" rows="2" placeholder="e.g. Leadership in Times of Change"></textarea>
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">Word of the Day</label>
+            <textarea class="form-control" id="mtg-wod" rows="2" placeholder="e.g. Perspicacious"></textarea>
+          </div>
+          <div class="col-12 col-md-8">
+            <label class="form-label">Word Meaning</label>
+            <textarea class="form-control" id="mtg-wod-meaning" rows="2" placeholder="e.g. Having a ready insight into things; shrewd and deeply perceptive"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-title"><i class="bi bi-people me-1"></i>Roles</div>
+        <div class="row g-3">
+          <div class="col-6 col-md-4">
+            <label class="form-label">Toastmaster of the Meeting</label>
+            <div id="role-toastmaster-wrap"></div>
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">Sergeant at Arms</label>
+            <div id="role-saa-wrap"></div>
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">General Evaluator</label>
+            <div id="role-gen-eval-wrap"></div>
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">Grammarian</label>
+            <div id="role-grammarian-wrap"></div>
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">Timer</label>
+            <div id="role-timer-wrap"></div>
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">Ah Counter</label>
+            <div id="role-ah-counter-wrap"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <div class="section-title mb-0"><i class="bi bi-mic me-1"></i>Prepared Speakers</div>
+          <button class="btn btn-add btn-sm" id="btn-add-speaker" onclick="addSpeaker()">
+            <i class="bi bi-plus-circle me-1"></i>Add Speaker
+          </button>
+        </div>
+        <div id="speakers-container"></div>
+        <div class="text-muted small mt-1" id="speakers-hint">Up to 10 prepared speakers.</div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-title"><i class="bi bi-chat-dots me-1"></i>Table Topics</div>
+        <div class="tt-card">
+          <div class="row g-3 align-items-center">
+            <div class="col-8 col-md-5">
+              <label class="form-label">Table Topics Master / Facilitator</label>
+              <div id="tt-facilitator-wrap"></div>
+            </div>
+            <div class="col-4 col-md-3">
+              <label class="form-label">Duration (min)</label>
+              <input type="number" class="form-control" id="tt-duration" min="5" max="60" value="20" inputmode="numeric">
+            </div>
+            <div class="col-12 col-md-4 text-muted small d-none d-md-block">
+              <i class="bi bi-clock me-1"></i>Impromptu speaking session duration.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /tab-meeting -->
+
+    <!-- TAB 2: CLUB SETTINGS -->
+    <div class="tab-pane fade" id="tab-club">
+
+      <div class="section-card">
+        <div class="section-title"><i class="bi bi-building me-1"></i>Club Information</div>
+        <p class="text-muted small mb-3"><i class="bi bi-info-circle me-1"></i>This information is pre-filled from the club's default settings. There is generally no need to change it — only update if something is genuinely incorrect or has changed.</p>
+        <div class="row g-3">
+          <div class="col-12 col-md-6">
+            <label class="form-label">Club Name</label>
+            <input type="text" class="form-control" id="cfg-name" placeholder="e.g. Sunrise Toastmasters Club">
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label">Default Meeting Time</label>
+            <input type="text" class="form-control" id="cfg-time" placeholder="e.g. 2:00 PM">
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label">Location</label>
+            <textarea class="form-control" id="cfg-location" rows="2" placeholder="e.g. Room 101, Main Campus"></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Vision</label>
+            <textarea class="form-control" id="cfg-vision" rows="2"></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Mission</label>
+            <textarea class="form-control" id="cfg-mission" rows="2"></textarea>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label">Meeting Days</label>
+            <textarea class="form-control" id="cfg-meeting-days" rows="2" placeholder="e.g. We meet 1st and 3rd Saturday of the month at 3:00 PM"></textarea>
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label">Social Media / How to Connect</label>
+            <textarea class="form-control" id="cfg-social-connect" rows="2" placeholder="e.g. Follow us on LinkedIn, Facebook, and Instagram"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <div class="section-title mb-0">
+            <i class="bi bi-person-lines-fill me-1"></i>Members / Role Players
+          </div>
+          <button class="btn btn-add btn-sm" onclick="addMemberRow()">
+            <i class="bi bi-plus-circle me-1"></i>Add Member
+          </button>
+        </div>
+        <p class="text-muted small mb-2">These names populate the role dropdowns. Changes save to your browser.</p>
+        <div id="members-body"></div>
+      </div>
+
+      <div class="section-card">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <div class="section-title mb-0"><i class="bi bi-person-badge me-1"></i>Committee Members</div>
+          <button class="btn btn-add btn-sm" onclick="addCommitteeRow()">
+            <i class="bi bi-plus-circle me-1"></i>Add Member
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-borderless mb-0" id="committee-table">
+            <thead>
+              <tr>
+                <th class="ps-2" style="width:45%">Designation</th>
+                <th style="width:45%">Name</th>
+                <th style="width:10%"></th>
+              </tr>
+            </thead>
+            <tbody id="committee-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-end gap-2 mt-2 mb-4">
+        <button class="btn btn-tm-red px-4" onclick="saveClubSettings()">
+          <i class="bi bi-floppy me-1"></i>Save Club Settings
+        </button>
+      </div>
+
+    </div><!-- /tab-club -->
+  </div><!-- /tab-content -->
+</div><!-- /container -->
+
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js" integrity="sha384-VFQrHzqBh5qiJIU0uGU5CIW3+OWpdGGJM9LBnGbuIH2mkICcFZ7lPd/AAtI7SNf7" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js" integrity="sha384-/RlQG9uf0M2vcTw3CX7fbqgbj/h8wKxw7C3zu9/GxcBPRKOEcESxaxufwRXqzq6n" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js" integrity="sha384-4xaIisuLEy2lo2HkB2C4rEf7v8jbTb2kuogX6TkuEt9feTWKBSFSOzsqNNbV+sKh" crossorigin="anonymous"></script>
+<script src="app.js"></script>
+</body>
+</html>

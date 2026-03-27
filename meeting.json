@@ -1,0 +1,21 @@
+{
+  "date": "",
+  "time": "3:00 PM",
+  "meeting_number": "",
+  "theme": "",
+  "word_of_day": "",
+  "word_meaning": "",
+  "roles": {
+    "toastmaster": "",
+    "sergeant_at_arms": "",
+    "grammarian": "",
+    "timer": "",
+    "ah_counter": "",
+    "general_evaluator": ""
+  },
+  "speakers": [],
+  "table_topics": {
+    "facilitator": "",
+    "duration": 20
+  }
+}
