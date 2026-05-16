@@ -6,24 +6,27 @@
     "meeting_time": "3:00 PM",
     "location": "WORK by Kickstart Co-Working, 8-A New Muslim Town, Canal Road, Lahore",
     "meeting_days": "We meet 1st and 3rd Saturday of the month at 3:00 PM",
-    "social_connect": "Our club is very active on social media. We post regular updates on LinkedIn, Facebook, and Instagram. Search for \"Lahore Toastmasters Club\" and follow us on your favorite social media channel."
+    "social_connect": "Our club is very active on social media. We post regular updates on LinkedIn, Facebook, and Instagram. Search for \"Lahore Toastmasters Club\" and follow us on your favorite platform."
   },
-  "committee": [
-    {"designation": "President", "name": "Dr. Bashir Ahmad"},
-    {"designation": "VP Education", "name": "Hira Ashfaq"},
-    {"designation": "VP Membership", "name": "DTM Saif Ali Sheikh"},
-    {"designation": "VP Public Relations", "name": "Zain Bin Shahid"},
-    {"designation": "Secretary", "name": "Asad Zia"},
-    {"designation": "Treasurer", "name": "DTM Saif Ali Sheikh"},
-    {"designation": "Sergeant at Arms", "name": "Zain Bin Shahid"}
-  ],
   "members": [
-    "Dr. Bashir Ahmad",
-    "Hira Ashfaq",
-    "DTM Saif Ali Sheikh",
-    "Zain Bin Shahid",
-    "Asad Zia",
+    { "name": "Dr. Bashir Ahmad", "designations": ["President"] },
+    { "name": "Hira Ashfaq", "designations": ["VP Education"] },
+    { "name": "DTM Saif Ali Sheikh", "designations": ["VP Membership", "Treasurer"] },
+    { "name": "Zain Bin Shahid", "designations": ["VP Public Relations", "Sergeant at Arms"] },
+    { "name": "Asad Zia", "designations": ["Secretary"] },
     "Sohail Jibran",
-    "Umar Ibrahim", "Musab Ahmad", "Anzalna Sami", "Alishba Sami", "Maha Umar", "Mariam Umar", "Asim Hameed", "Irfan Ehsan Khan", "Usman Ali Awan", "Humza Niaz", "Farhan Ali", "Sulman Khan", "Amaan Shaukat",  "Aisha Ijaz"
+    "Umar Ibrahim",
+    "Musab Ahmad",
+    "Anzalna Sami",
+    "Alishba Sami",
+    "Maha Umar",
+    "Mariam Umar",
+    "Asim Hameed",
+    "Irfan Ehsan Khan",
+    "Usman Ali Awan",
+    "Humza Niaz",
+    "Farhan Ali",
+    "Sulman Khan",
+    "Amaad Khan"
   ]
 }
