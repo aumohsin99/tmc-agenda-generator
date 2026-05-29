@@ -146,14 +146,14 @@
       </div>
 
       <div class="section-card">
-        <div class="d-flex align-items-center justify-content-between mb-3">
-          <div class="section-title mb-0"><i class="bi bi-mic me-1"></i>Prepared Speakers</div>
+        <div class="section-title mb-3"><i class="bi bi-mic me-1"></i>Prepared Speakers</div>
+        <div id="speakers-container"></div>
+        <div class="d-flex align-items-center justify-content-between mt-2">
+          <span class="text-muted small" id="speakers-hint">Up to 10 prepared speakers.</span>
           <button class="btn btn-add btn-sm" id="btn-add-speaker" onclick="addSpeaker()">
             <i class="bi bi-plus-circle me-1"></i>Add Speaker
           </button>
         </div>
-        <div id="speakers-container"></div>
-        <div class="text-muted small mt-1" id="speakers-hint">Up to 10 prepared speakers.</div>
       </div>
 
       <div class="section-card">
@@ -173,6 +173,17 @@
             </div>
           </div>
         </div>
+      </div>
+
+      <div class="section-card">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <div class="section-title mb-0"><i class="bi bi-puzzle me-1"></i>Custom Sections</div>
+          <button class="btn btn-add btn-sm" onclick="addCustomSection()">
+            <i class="bi bi-plus-circle me-1"></i>Add Section
+          </button>
+        </div>
+        <p class="text-muted small mb-2">Add extra agenda segments (e.g. Elections). Set a heading, choose where it appears in the agenda, and add as many rows as you need.</p>
+        <div id="custom-sections-container"></div>
       </div>
 
     </div><!-- /tab-meeting -->
@@ -218,35 +229,14 @@
       <div class="section-card">
         <div class="d-flex align-items-center justify-content-between mb-3">
           <div class="section-title mb-0">
-            <i class="bi bi-person-lines-fill me-1"></i>Members / Role Players
+            <i class="bi bi-person-lines-fill me-1"></i>Members &amp; Committee
           </div>
           <button class="btn btn-add btn-sm" onclick="addMemberRow()">
             <i class="bi bi-plus-circle me-1"></i>Add Member
           </button>
         </div>
-        <p class="text-muted small mb-2">These names populate the role dropdowns. Changes save to your browser.</p>
+        <p class="text-muted small mb-2">These names populate the role dropdowns. Add a committee role (e.g. <em>President</em>) only for committee members — leave it blank for regular members. Use commas for more than one role (e.g. <em>VP Membership, Treasurer</em>). Committee roles appear in the agenda's left panel.</p>
         <div id="members-body"></div>
-      </div>
-
-      <div class="section-card">
-        <div class="d-flex align-items-center justify-content-between mb-3">
-          <div class="section-title mb-0"><i class="bi bi-person-badge me-1"></i>Committee Members</div>
-          <button class="btn btn-add btn-sm" onclick="addCommitteeRow()">
-            <i class="bi bi-plus-circle me-1"></i>Add Member
-          </button>
-        </div>
-        <div class="table-responsive">
-          <table class="table table-borderless mb-0" id="committee-table">
-            <thead>
-              <tr>
-                <th class="ps-2" style="width:45%">Designation</th>
-                <th style="width:45%">Name</th>
-                <th style="width:10%"></th>
-              </tr>
-            </thead>
-            <tbody id="committee-body"></tbody>
-          </table>
-        </div>
       </div>
 
       <div class="d-flex justify-content-end gap-2 mt-2 mb-4">
