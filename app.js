@@ -1,5 +1,52 @@
 // ── Global state ───────────────────────────────────────────────────────────
 let MEMBERS = [];
+let COMMITTEE = [];   // derived { designation, name } list, used for role defaults
+
+// ── Member model ─────────────────────────────────────────────────────────────
+// A member is stored in club-settings.json either as a plain string (regular
+// member) or as an object { name, designations: [...] } (committee member).
+// Internally we always work with the normalized { name, designations } form.
+const DESIGNATION_ORDER = [
+  'President', 'VP Education', 'VP Membership', 'VP Public Relations',
+  'Secretary', 'Treasurer', 'Sergeant at Arms'
+];
+
+function normalizeMember(m) {
+  if (typeof m === 'string') return { name: m.trim(), designations: [] };
+  if (m && typeof m === 'object') {
+    return {
+      name: (m.name || '').trim(),
+      designations: Array.isArray(m.designations)
+        ? m.designations.map(d => String(d).trim()).filter(Boolean)
+        : [],
+    };
+  }
+  return { name: '', designations: [] };
+}
+
+function memberName(m) { return normalizeMember(m).name; }
+
+// Flatten members-with-designations into the ordered { designation, name }
+// list the agenda's left panel and president lookup expect.
+function deriveCommittee(memberObjs) {
+  const list = [];
+  memberObjs.forEach(m => (m.designations || []).forEach(d => {
+    if (d) list.push({ designation: d, name: m.name });
+  }));
+  list.sort((a, b) => {
+    const ia = DESIGNATION_ORDER.indexOf(a.designation);
+    const ib = DESIGNATION_ORDER.indexOf(b.designation);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  });
+  return list;
+}
+
+// Name of the committee member holding a given role (by keyword), or '' if none.
+function committeeMemberByRole(keyword) {
+  const kw = keyword.toLowerCase();
+  const m = COMMITTEE.find(c => (c.designation || '').toLowerCase().includes(kw));
+  return m ? m.name : '';
+}
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 function val(id)   { return (document.getElementById(id)?.value || '').trim(); }
@@ -111,22 +158,34 @@ function renderMembersUI(members) {
   if (members.length === 0) {
     body.insertAdjacentHTML('beforeend', '<p class="text-muted small">No members yet. Add some above.</p>');
   }
-  members.forEach(name => addMemberRow(name));
+  members.forEach(m => {
+    const mm = normalizeMember(m);
+    addMemberRow(mm.name, mm.designations.join(', '));
+  });
 }
 
-function addMemberRow(name = '') {
+function addMemberRow(name = '', designations = '') {
   const body  = document.getElementById('members-body');
   const empty = body.querySelector('p.text-muted');
   if (empty) empty.remove();
   body.insertAdjacentHTML('beforeend', `
-    <div class="d-flex align-items-center gap-2 mb-2 member-row">
-      <input type="text" class="form-control form-control-sm member-name-input flex-grow-1"
-             placeholder="Full name" value="${esc(name)}"
-             onblur="refreshAllMemberPickers()">
-      <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2"
-              onclick="this.closest('.member-row').remove(); refreshAllMemberPickers()">
-        <i class="bi bi-trash3"></i>
-      </button>
+    <div class="row g-2 align-items-center mb-2 member-row">
+      <div class="col-12 col-md-6">
+        <input type="text" class="form-control form-control-sm member-name-input"
+               placeholder="Full name" value="${esc(name)}"
+               onblur="refreshAllMemberPickers()">
+      </div>
+      <div class="col-10 col-md-5">
+        <input type="text" class="form-control form-control-sm member-desig-input"
+               placeholder="Committee role(s) — leave blank for a regular member"
+               value="${esc(designations)}">
+      </div>
+      <div class="col-2 col-md-1 text-end">
+        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2"
+                onclick="this.closest('.member-row').remove(); refreshAllMemberPickers()">
+          <i class="bi bi-trash3"></i>
+        </button>
+      </div>
     </div>`);
 }
 
@@ -209,21 +268,180 @@ function updateAddSpeakerBtn() {
     : `Up to 10 prepared speakers. ${speakerCount}/10 added.`;
 }
 
-// ── Committee ──────────────────────────────────────────────────────────────
-function addCommitteeRow(data = {}) {
-  document.getElementById('committee-body').insertAdjacentHTML('beforeend', `
-    <tr class="committee-row">
-      <td><input type="text" class="form-control form-control-sm cm-designation"
-           placeholder="e.g. President" value="${esc(data.designation||'')}"></td>
-      <td><input type="text" class="form-control form-control-sm cm-name"
-           placeholder="Full name" value="${esc(data.name||'')}"></td>
-      <td>
+// ── Custom sections ──────────────────────────────────────────────────────────
+let customSectionCount = 0;
+
+// A custom section is anchored *after* one of the agenda's fixed segments.
+// The keys are listed in agenda order and numbered so the placement is obvious.
+const CUSTOM_ANCHORS = [
+  { key: 'opening',      label: '1 · After meeting opening' },
+  { key: 'prepared',     label: '2 · After prepared speeches' },
+  { key: 'table_topics', label: '3 · After table topics' },
+  { key: 'evaluation',   label: '4 · After evaluation & awards' },
+  { key: 'closure',      label: '5 · After meeting closure (end)' },
+];
+
+// Resolve a section's anchor, tolerating older drafts that used position start/end.
+// An anchor is either a fixed segment key, or "custom:<id>" to sit after another
+// custom section. Validity of a "custom:" target is checked when building/refreshing.
+function resolveAnchor(s) {
+  if (CUSTOM_ANCHORS.some(a => a.key === s.after)) return s.after;
+  if (typeof s.after === 'string' && s.after.startsWith('custom:')) return s.after;
+  if (s.position === 'start') return 'opening';
+  if (s.position === 'end')   return 'closure';
+  return 'evaluation';
+}
+
+function addCustomSection(data = {}) {
+  // Stable id: reuse a saved id when reloading a draft so "after: custom:<id>"
+  // references survive; otherwise mint the next one.
+  const n = (data.id != null) ? data.id : (customSectionCount + 1);
+  customSectionCount = Math.max(customSectionCount, Number(n) || 0);
+  const desired = resolveAnchor(data);
+  document.getElementById('custom-sections-container').insertAdjacentHTML('beforeend', `
+    <div class="custom-section-card border rounded p-2 mb-2" id="custom-section-${n}" data-csid="${n}"
+         style="background:#F4ECF7;border-color:#D2B4DE">
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <input type="text" class="form-control form-control-sm cs-heading fw-semibold"
+               placeholder="Section heading, e.g. ELECTIONS" value="${esc(data.heading||'')}"
+               oninput="refreshCustomAnchorDropdowns()">
+        <select class="form-select form-select-sm cs-after" style="max-width:250px"
+                title="Where this section appears in the agenda"
+                data-desired="${esc(desired)}"
+                onchange="this.dataset.desired = this.value; refreshCustomAnchorDropdowns()"></select>
         <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2"
-                onclick="this.closest('tr').remove()">
+                onclick="document.getElementById('custom-section-${n}').remove(); refreshCustomAnchorDropdowns()">
           <i class="bi bi-trash3"></i>
         </button>
-      </td>
-    </tr>`);
+      </div>
+      <div class="cs-rows"></div>
+      <button type="button" class="btn btn-add btn-sm mt-1" onclick="addCustomRow(${n})">
+        <i class="bi bi-plus-circle me-1"></i>Add Row
+      </button>
+    </div>`);
+  const rows = (data.rows && data.rows.length) ? data.rows : [{}];
+  rows.forEach(r => addCustomRow(n, r));
+  refreshCustomAnchorDropdowns();
+}
+
+// A card's current intended anchor value (fixed key or "custom:<id>").
+function cardAnchorValue(card) {
+  const sel = card.querySelector('.cs-after');
+  return sel ? (sel.dataset.desired || sel.value) : 'evaluation';
+}
+
+// Does `card`'s anchor chain pass through the section with id `targetId`?
+// Used to keep a section from being placed after one of its own descendants
+// (which would create a cycle).
+function anchorChainHits(card, targetId, seen) {
+  seen = seen || new Set();
+  const val = cardAnchorValue(card);
+  if (typeof val !== 'string' || !val.startsWith('custom:')) return false;
+  const tid = val.slice(7);
+  if (tid === String(targetId)) return true;
+  if (seen.has(tid)) return false;
+  seen.add(tid);
+  const next = document.querySelector(`#custom-sections-container .custom-section-card[data-csid="${tid}"]`);
+  return next ? anchorChainHits(next, targetId, seen) : false;
+}
+
+// The full list of anchor targets in the order they actually appear in the
+// agenda: each fixed segment, immediately followed by any custom sections
+// anchored after it (recursively for chains). Custom sections thus show up as
+// first-class "After <heading>" entries at their real position. Returns
+// [{ value, name }] where name already includes the "After " prefix.
+function orderedAnchorOptions() {
+  const cards = [...document.querySelectorAll('#custom-sections-container .custom-section-card')];
+  const placed = new Set();
+  const list = [];
+  function placeAfter(anchorValue) {
+    cards.forEach(c => {
+      if (cardAnchorValue(c) !== anchorValue) return;
+      const cid = c.dataset.csid;
+      if (placed.has(cid)) return;
+      placed.add(cid);
+      const h = c.querySelector('.cs-heading')?.value?.trim() || 'Untitled section';
+      list.push({ value: 'custom:' + cid, name: 'After ' + h });
+      placeAfter('custom:' + cid);
+    });
+  }
+  CUSTOM_ANCHORS.forEach(a => {
+    list.push({ value: a.key, name: a.label.replace(/^\d+\s*·\s*/, '') });
+    placeAfter(a.key);
+  });
+  // Orphans (dangling refs / cycles) go to the end so they never disappear.
+  cards.forEach(c => {
+    const cid = c.dataset.csid;
+    if (placed.has(cid)) return;
+    placed.add(cid);
+    const h = c.querySelector('.cs-heading')?.value?.trim() || 'Untitled section';
+    list.push({ value: 'custom:' + cid, name: 'After ' + h });
+  });
+  return list;
+}
+
+// Rebuild every section's anchor dropdown as one agenda-ordered, sequentially
+// numbered list of fixed segments AND custom sections (each shown simply as
+// "N · After <name>"). A section's own entry — and any section that depends on
+// it — is omitted so you can't anchor it after itself or create a cycle.
+// Selection is driven by each select's data-desired so the user's choice
+// survives rebuilds; a dangling reference falls back to "after evaluation".
+function refreshCustomAnchorDropdowns() {
+  const cards   = [...document.querySelectorAll('#custom-sections-container .custom-section-card')];
+  const ordered = orderedAnchorOptions();
+  cards.forEach(card => {
+    const myId = card.dataset.csid;
+    const sel  = card.querySelector('.cs-after');
+    if (!sel) return;
+    let num = 0;
+    const html = ordered.filter(o => {
+      if (o.value === 'custom:' + myId) return false;     // not itself
+      if (o.value.startsWith('custom:')) {
+        const tcard = document.querySelector(
+          `#custom-sections-container .custom-section-card[data-csid="${o.value.slice(7)}"]`);
+        if (tcard && anchorChainHits(tcard, myId)) return false;  // not a descendant
+      }
+      return true;
+    }).map(o => `<option value="${o.value}">${++num} · ${esc(o.name)}</option>`).join('');
+    sel.innerHTML = html;
+    const want  = sel.dataset.desired;
+    const valid = [...sel.options].some(o => o.value === want);
+    sel.value = valid ? want : 'evaluation';
+    if (valid) sel.dataset.desired = want;
+  });
+}
+
+let customRowSeq = 0;
+
+function addCustomRow(n, data = {}) {
+  const wrap = document.querySelector(`#custom-section-${n} .cs-rows`);
+  if (!wrap) return;
+  // Reuse the standard member picker: a members dropdown plus an "Other…"
+  // option that reveals a free-text field for anyone not on the list.
+  const pid = 'cs-person-' + (++customRowSeq);
+  wrap.insertAdjacentHTML('beforeend', `
+    <div class="row g-2 mb-2 align-items-end cs-row">
+      <div class="col-4 col-md-2">
+        <label class="form-label small mb-1">Duration (min)</label>
+        <input type="number" class="form-control form-control-sm cs-duration"
+               min="0" max="120" value="${data.duration != null ? data.duration : 5}" inputmode="numeric">
+      </div>
+      <div class="col-8 col-md-5">
+        <label class="form-label small mb-1">Activity / Details</label>
+        <input type="text" class="form-control form-control-sm cs-activity"
+               placeholder="e.g. Nomination & voting for new committee" value="${esc(data.activity||'')}">
+      </div>
+      <div class="col-9 col-md-4">
+        <label class="form-label small mb-1">Assigned To / Responsible</label>
+        ${memberPickerHTML(pid, data.person || '', true)}
+      </div>
+      <div class="col-3 col-md-1 text-end">
+        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 w-100"
+                onclick="this.closest('.cs-row').remove()">
+          <i class="bi bi-trash3"></i>
+        </button>
+      </div>
+    </div>`);
 }
 
 // ── Data collection ────────────────────────────────────────────────────────
@@ -238,6 +456,21 @@ function collectMeetingData() {
       speech_number: val(`spk-${i}-project`),
       evaluator:     getMemberValue(`spk-${i}-evaluator`),
     });
+  });
+  const custom_sections = [];
+  document.querySelectorAll('#custom-sections-container .custom-section-card').forEach(card => {
+    const id      = card.dataset.csid;
+    const heading = card.querySelector('.cs-heading')?.value?.trim() || '';
+    const after   = card.querySelector('.cs-after')?.value || 'evaluation';
+    const csRows = [];
+    card.querySelectorAll('.cs-row').forEach(rw => {
+      const activity = rw.querySelector('.cs-activity')?.value?.trim() || '';
+      const sel      = rw.querySelector('.member-select');
+      const person   = sel ? getMemberValue(sel.id) : '';
+      const duration = parseInt(rw.querySelector('.cs-duration')?.value) || 0;
+      if (activity || person) csRows.push({ duration, activity, person });
+    });
+    if (heading || csRows.length) custom_sections.push({ id, heading, after, rows: csRows });
   });
   return {
     date:           val('mtg-date'),
@@ -259,22 +492,32 @@ function collectMeetingData() {
       facilitator: getMemberValue('tt-facilitator'),
       duration:    parseInt(val('tt-duration')) || 20,
     },
+    custom_sections,
   };
 }
 
 function collectConfigData() {
-  const committee = [];
-  document.querySelectorAll('#committee-body tr').forEach(tr => {
-    const des = tr.querySelector('.cm-designation')?.value?.trim();
-    const nm  = tr.querySelector('.cm-name')?.value?.trim();
-    if (des || nm) committee.push({ designation: des||'', name: nm||'' });
+  // Single source of truth: each member row carries an optional list of
+  // committee designations. The committee list (for the PDF) is derived from it.
+  const memberObjs = [];
+  document.querySelectorAll('#members-body .member-row').forEach(row => {
+    const name = row.querySelector('.member-name-input')?.value?.trim();
+    if (!name) return;
+    const desigRaw = row.querySelector('.member-desig-input')?.value?.trim() || '';
+    const designations = desigRaw
+      ? desigRaw.split(',').map(d => d.trim()).filter(Boolean)
+      : [];
+    memberObjs.push({ name, designations });
   });
-  const members = [];
-  document.querySelectorAll('.member-name-input').forEach(el => {
-    const n = el.value.trim();
-    if (n) members.push(n);
-  });
-  members.sort((a, b) => a.localeCompare(b));
+  memberObjs.sort((a, b) => a.name.localeCompare(b.name));
+
+  // Serialize back to the club-settings.json shape: plain string when no
+  // designations, object with designations otherwise.
+  const members = memberObjs.map(m =>
+    m.designations.length ? { name: m.name, designations: m.designations } : m.name
+  );
+  const committee = deriveCommittee(memberObjs);
+
   return {
     club: {
       name:           val('cfg-name'),
@@ -300,7 +543,8 @@ function populateMeeting(m) {
   set('mtg-wod-meaning', m.word_meaning || '');
   const roles = m.roles || {};
   setMemberValue('role-toastmaster', roles.toastmaster || '');
-  setMemberValue('role-saa',         roles.sergeant_at_arms || '');
+  // Sergeant at Arms defaults to the committee member holding that designation.
+  setMemberValue('role-saa',         roles.sergeant_at_arms || committeeMemberByRole('sergeant'));
   setMemberValue('role-grammarian',  roles.grammarian || '');
   setMemberValue('role-timer',       roles.timer || '');
   setMemberValue('role-ah-counter',  roles.ah_counter || '');
@@ -308,6 +552,7 @@ function populateMeeting(m) {
   setMemberValue('tt-facilitator',   (m.table_topics||{}).facilitator || '');
   set('tt-duration', (m.table_topics||{}).duration || 20);
   (m.speakers||[]).slice(0,10).forEach(s => addSpeaker(s));
+  (m.custom_sections||[]).forEach(s => addCustomSection(s));
 }
 
 function populateConfig(cfg) {
@@ -319,9 +564,10 @@ function populateConfig(cfg) {
   set('cfg-location',       club.location       || '');
   set('cfg-meeting-days',   club.meeting_days   || '');
   set('cfg-social-connect', club.social_connect || '');
-  (cfg.committee||[]).forEach(row => addCommitteeRow(row));
-  MEMBERS = (cfg.members||[]).slice();
-  renderMembersUI(MEMBERS);
+  const memberObjs = (cfg.members||[]).map(normalizeMember);
+  MEMBERS = memberObjs.map(m => m.name);
+  COMMITTEE = deriveCommittee(memberObjs);
+  renderMembersUI(memberObjs);
 }
 
 // ── localStorage save/load ─────────────────────────────────────────────────
@@ -343,6 +589,8 @@ function newMeeting() {
   document.getElementById('speakers-container').innerHTML = '';
   speakerCount = 0;
   updateAddSpeakerBtn();
+  document.getElementById('custom-sections-container').innerHTML = '';
+  customSectionCount = 0;
   set('mtg-date',        new Date().toLocaleDateString('en-CA'));
   set('mtg-time',        '');
   set('mtg-number',      '');
@@ -436,16 +684,41 @@ function buildAgendaRows(meeting, config) {
     return { type: 'segment', title, time: null, dur: 0, act: title, person: '' };
   }
 
+  const customSections = meeting.custom_sections || [];
+  customSections.forEach((s, i) => { if (s.id == null) s.id = 'auto' + i; });
+  const placedCustom = new Set();
+  function pushCustomSection(sec) {
+    if (!sec) return;
+    const sid = String(sec.id);
+    if (placedCustom.has(sid)) return;   // already placed — also guards against cycles
+    placedCustom.add(sid);
+    if (sec.heading || (sec.rows && sec.rows.length)) {
+      rows.push(seg((sec.heading || 'CUSTOM SECTION').toUpperCase()));
+      (sec.rows || []).forEach(r => {
+        rows.push(row(parseInt(r.duration || 0), r.activity || '', r.person || '', 'custom'));
+      });
+    }
+    // Chain: place any sections anchored directly after this custom section.
+    customSections.filter(s => resolveAnchor(s) === 'custom:' + sec.id).forEach(pushCustomSection);
+  }
+  // Insert custom sections anchored after the given fixed agenda segment.
+  function pushCustomAfter(anchorKey) {
+    customSections
+      .filter(s => resolveAnchor(s) === anchorKey && !placedCustom.has(String(s.id)))
+      .forEach(pushCustomSection);
+  }
+
   const rows = [];
   rows.push(seg('MEETING STARTS'));
   rows.push(row(2, 'Open Meeting, Play National Anthem & Invite the President', saa));
   rows.push(row(5, "President's Address and Official Start of the Meeting", president));
   rows.push(row(5, 'Opening Remarks, Welcome Guests, Meeting Agenda & Business Session by Toastmaster of the Day', toastmaster));
   rows.push(row(2, 'Introduce Role Players', toastmaster, 'sub_header'));
-  rows.push(row(1, 'General Evaluator', genEval,    'role'));
-  rows.push(row(1, 'Grammarian',        grammarian, 'role'));
-  rows.push(row(1, 'Ah-Counter',        ahCounter,  'role'));
-  rows.push(row(1, 'Timer',             timer,      'role'));
+  rows.push(row(2, 'General Evaluator', genEval,    'role'));
+  rows.push(row(2, 'Grammarian',        grammarian, 'role'));
+  rows.push(row(2, 'Ah-Counter',        ahCounter,  'role'));
+  rows.push(row(2, 'Timer',             timer,      'role'));
+  pushCustomAfter('opening');
 
   if (speakers.length > 0) {
     rows.push(seg('PREPARED SPEECHES SEGMENT'));
@@ -459,11 +732,13 @@ function buildAgendaRows(meeting, config) {
     rows.push(row(2, "Timer's Report", timer, 'report'));
     rows.push(row(0, 'Voting Reminder', '', 'voting'));
   }
+  pushCustomAfter('prepared');
 
   rows.push(seg('TABLE TOPICS SEGMENT'));
   rows.push(row(ttDur, 'Table Topics Session (Impromptu Speaking)', ttHost, 'table_topics'));
   rows.push(row(2, "Timer's Report", timer, 'report'));
   rows.push(row(0, 'Voting Reminder', '', 'voting'));
+  pushCustomAfter('table_topics');
 
   rows.push(seg('EVALUATION (FEEDBACK) SEGMENT'));
   speakers.forEach((spk, i) => {
@@ -477,10 +752,15 @@ function buildAgendaRows(meeting, config) {
   rows.push(row(2, 'Grammarian Report',  grammarian, 'report'));
   rows.push(row(5, 'Awards Segment',     toastmaster,'fixed'));
   rows.push(row(5, 'Overall Meeting Report by General Evaluator', genEval, 'fixed'));
+  pushCustomAfter('evaluation');
 
   rows.push(seg('MEETING CLOSURE'));
   rows.push(row(5, 'Toastmaster of the Day makes announcements (if any), invites feedback, and wraps up the session', toastmaster));
   rows.push(row(2, 'President adjourns the meeting.', president));
+  pushCustomAfter('closure');
+  // Safety net: any section whose anchor target was deleted or formed a cycle
+  // lands at the very end rather than vanishing.
+  customSections.filter(s => !placedCustom.has(String(s.id))).forEach(pushCustomSection);
 
   return rows;
 }
@@ -511,6 +791,7 @@ const ROW_COLORS_JS = {
   voting:       ['#FFF8E7', '#FFF0D0'],
   details:      ['#F5F5F5', '#EBEBEB'],
   sub_header:   ['#F5E6E6', '#EED8D8'],
+  custom:       ['#F4ECF7', '#EADAF0'],
 };
 
 function buildPdfDefinition(meeting, config) {
@@ -882,13 +1163,14 @@ async function loadData() {
     const cfg = {
       // user-editable club text fields come from localStorage if saved
       club: (localCfg && localCfg.club) ? localCfg.club : cfgJson.club,
-      // members + committee always from the fetched file — never stale
-      members:   (cfgJson.members   || []).slice().sort((a,b) => a.localeCompare(b)),
-      committee: cfgJson.committee,
+      // members always come from the fetched file — never stale. Each entry is
+      // either a plain name (regular member) or { name, designations } (committee).
+      members: (cfgJson.members || []).slice()
+        .sort((a, b) => memberName(a).localeCompare(memberName(b))),
     };
     const mtg = savedMtg ? JSON.parse(savedMtg) : mtgJson;
 
-    MEMBERS = (cfg.members || []).slice();
+    MEMBERS = (cfg.members || []).map(memberName);
     initStaticPickers();
     populateConfig(cfg);
     populateMeeting(mtg);
