@@ -57,14 +57,18 @@ Edit `club-settings.json` directly to change what all users see as defaults on f
     "meeting_days": "We meet 1st and 3rd Saturday of the month at 3:00 PM",
     "social_connect": "Follow us on LinkedIn, Facebook, and Instagram..."
   },
-  "committee": [
-    { "designation": "President", "name": "Dr. Bashir Ahmad" }
-  ],
-  "members": ["Dr. Bashir Ahmad", "Hira Ashfaq", "..."]
+  "members": [
+    { "name": "Dr. Bashir Ahmad", "designations": ["President"] },
+    { "name": "DTM Saif Ali Sheikh", "designations": ["VP Membership", "Treasurer"] },
+    "Sohail Jibran",
+    "Umar Ibrahim"
+  ]
 }
 ```
 
-> **Important:** `members` and `committee` are always loaded fresh from this file on every page load — users can never end up with a stale members list even if they have a saved draft.
+> **One members list.** Every entry is either a plain name (a regular member) or an object `{ "name": ..., "designations": [...] }` (a committee member). The club management committee shown in the agenda's left panel is **derived automatically** from the members who have designations — there is no separate `committee` list to keep in sync. A member can hold more than one role (e.g. `["VP Membership", "Treasurer"]`).
+>
+> **Important:** `members` is always loaded fresh from this file on every page load — users can never end up with a stale members list even if they have a saved draft.
 
 ## Updating Meeting Defaults
 
@@ -87,7 +91,8 @@ Edit `meeting.json` to change the pre-filled meeting data shown to first-time vi
     "general_evaluator": ""
   },
   "speakers": [],
-  "table_topics": { "facilitator": "", "duration": 20 }
+  "table_topics": { "facilitator": "", "duration": 20 },
+  "custom_sections": []
 }
 ```
 
@@ -98,15 +103,15 @@ Edit `meeting.json` to change the pre-filled meeting data shown to first-time vi
 ### Meeting Details Tab
 
 - **Meeting Information** — date, number, start time (auto-formats on blur), theme, word of the day and meaning
-- **Roles** — dropdowns populated from the members list; choose a name or select "Other…" to type a custom name
-- **Prepared Speakers** — up to 10 speakers; each card has name, duration, evaluator, topic, and speech project/manual
+- **Roles** — dropdowns populated from the members list; choose a name or select "Other…" to type a custom name. **Sergeant at Arms** defaults to whichever committee member holds that designation
+- **Prepared Speakers** — up to 10 speakers; each card has name, duration, evaluator, topic, and speech project/manual. The **Add Speaker** button sits at the bottom of the list so you can keep adding speakers without scrolling back up
 - **Table Topics** — facilitator name and session duration
+- **Custom Sections** — add extra agenda segments (e.g. Elections) on the fly. Each section has a customizable heading, an **anchor** that places it *after* any existing segment. The anchor dropdown is one agenda-ordered, sequentially numbered list of every place a section can go — the five fixed segments **and every other custom section** shown inline at its real position (e.g. if "Dance" sits after prepared speeches, then "3 · After Dance" appears right under "2 · After prepared speeches"). This lets you chain sections (place "Results" right after "Elections"); a section can't be anchored after itself or after one that already depends on it. Each section also has any number of rows with Duration / Activity / Assigned-To. The Assigned-To field is the same member picker used everywhere else (pick from the members list, or choose "Other…" to type any name). Start times chain automatically just like the built-in rows
 
 ### Club Settings Tab
 
 - Club info: name, vision, mission, meeting time, location, meeting days, social media / how to connect
-- **Members / Role Players** — editable list that drives all role dropdowns; saved to your browser only
-- **Committee Members** — designation + name pairs shown in the left panel of the PDF
+- **Members & Committee** — one editable list that drives all role dropdowns. Leave the role field blank for a regular member, or type one or more committee roles (comma-separated, e.g. `VP Membership, Treasurer`) to mark someone as a committee member. Committee roles appear in the left panel of the PDF
 
 ---
 
@@ -128,8 +133,7 @@ No user action ever writes to `club-settings.json` or `meeting.json`. Those file
 
 | Data | Controlled by | Where it lives |
 |---|---|---|
-| Members list | You (edit `club-settings.json`) | Always fetched fresh from the file |
-| Committee | You (edit `club-settings.json`) | Always fetched fresh from the file |
+| Members list (incl. committee designations) | You (edit `club-settings.json`) | Always fetched fresh from the file |
 | Meeting Days / Social Connect | You (edit `club-settings.json`) | Always fetched fresh from the file |
 | Meeting form draft | Each user | Their own browser localStorage |
 | Club text fields | Each user (optional) | Their own browser localStorage |
