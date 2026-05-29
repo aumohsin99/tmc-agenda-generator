@@ -299,29 +299,77 @@ function addCustomSection(data = {}) {
   customSectionCount = Math.max(customSectionCount, Number(n) || 0);
   const desired = resolveAnchor(data);
   document.getElementById('custom-sections-container').insertAdjacentHTML('beforeend', `
-    <div class="custom-section-card border rounded p-2 mb-2" id="custom-section-${n}" data-csid="${n}"
-         style="background:#F4ECF7;border-color:#D2B4DE">
-      <div class="d-flex align-items-center gap-2 mb-2">
-        <input type="text" class="form-control form-control-sm cs-heading fw-semibold"
-               placeholder="Section heading, e.g. ELECTIONS" value="${esc(data.heading||'')}"
-               oninput="refreshCustomAnchorDropdowns()">
-        <select class="form-select form-select-sm cs-after" style="max-width:250px"
-                title="Where this section appears in the agenda"
-                data-desired="${esc(desired)}"
-                onchange="this.dataset.desired = this.value; refreshCustomAnchorDropdowns()"></select>
-        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2"
+    <div class="custom-section-card border border-2 rounded mb-3 overflow-hidden" id="custom-section-${n}" data-csid="${n}"
+         style="border-color:#C39BD3">
+      <div class="d-flex align-items-center px-2 py-2" style="background:#D2B4DE">
+        <i class="bi bi-puzzle me-2" style="color:#6C3483"></i>
+        <span class="fw-bold text-uppercase small flex-grow-1 cs-segment-title"
+              style="color:#6C3483;letter-spacing:.5px">Custom segment</span>
+        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 bg-white"
                 onclick="document.getElementById('custom-section-${n}').remove(); refreshCustomAnchorDropdowns()">
-          <i class="bi bi-trash3"></i>
+          <i class="bi bi-trash3 me-1"></i>Delete section
         </button>
       </div>
-      <div class="cs-rows"></div>
-      <button type="button" class="btn btn-add btn-sm mt-1" onclick="addCustomRow(${n})">
-        <i class="bi bi-plus-circle me-1"></i>Add Row
-      </button>
+      <div class="p-2" style="background:#F4ECF7">
+        <div class="row g-2 mb-3 align-items-end">
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1">Section heading <span class="text-muted">(shown as the segment title in the agenda)</span></label>
+            <input type="text" class="form-control form-control-sm cs-heading fw-semibold"
+                   placeholder="e.g. Pizza Party, Speech Competition, Educational Seminar"
+                   value="${esc(data.heading||'')}"
+                   oninput="refreshCustomAnchorDropdowns(); updateSectionChrome(${n})">
+          </div>
+          <div class="col-12 col-md-6">
+            <label class="form-label small mb-1">Position in agenda</label>
+            <select class="form-select form-select-sm cs-after"
+                    title="Where this section appears in the agenda"
+                    data-desired="${esc(desired)}"
+                    onchange="this.dataset.desired = this.value; refreshCustomAnchorDropdowns()"></select>
+          </div>
+        </div>
+        <div class="small fw-semibold text-muted mb-2"><i class="bi bi-list-ul me-1"></i>Activities in this section</div>
+        <div class="cs-rows"></div>
+        <button type="button" class="btn btn-add btn-sm mt-1 cs-add-row" onclick="addCustomRow(${n})">
+          <i class="bi bi-plus-circle me-1"></i>Add activity
+        </button>
+      </div>
     </div>`);
   const rows = (data.rows && data.rows.length) ? data.rows : [{}];
   rows.forEach(r => addCustomRow(n, r));
   refreshCustomAnchorDropdowns();
+  updateSectionChrome(n);
+}
+
+// Current heading text of a section.
+function customSectionHeading(n) {
+  const el = document.querySelector(`#custom-section-${n} .cs-heading`);
+  return (el?.value || '').trim();
+}
+
+// Renumber the "Activity 1, 2, 3…" badges within a section.
+function renumberActivities(n) {
+  const section = document.getElementById('custom-section-' + n);
+  if (!section) return;
+  section.querySelectorAll('.cs-row .cs-activity-label').forEach((lbl, i) => {
+    lbl.textContent = 'Activity ' + (i + 1);
+  });
+}
+
+// Reflect the section's heading in its header title and its "Add activity" button.
+function updateSectionChrome(n) {
+  const heading = customSectionHeading(n);
+  const title = document.querySelector(`#custom-section-${n} .cs-segment-title`);
+  if (title) title.textContent = heading || 'Custom segment';
+  const addBtn = document.querySelector(`#custom-section-${n} .cs-add-row`);
+  if (addBtn) addBtn.innerHTML = `<i class="bi bi-plus-circle me-1"></i>` +
+    (heading ? `Add activity to “${esc(heading)}”` : 'Add activity');
+}
+
+// Remove one activity row, then renumber the rest within its section.
+function removeCustomRow(btn) {
+  const section = btn.closest('.custom-section-card');
+  btn.closest('.cs-row').remove();
+  if (section) renumberActivities(section.dataset.csid);
 }
 
 // A card's current intended anchor value (fixed key or "custom:<id>").
@@ -420,28 +468,33 @@ function addCustomRow(n, data = {}) {
   // option that reveals a free-text field for anyone not on the list.
   const pid = 'cs-person-' + (++customRowSeq);
   wrap.insertAdjacentHTML('beforeend', `
-    <div class="row g-2 mb-2 align-items-end cs-row">
-      <div class="col-4 col-md-2">
-        <label class="form-label small mb-1">Duration (min)</label>
-        <input type="number" class="form-control form-control-sm cs-duration"
-               min="0" max="120" value="${data.duration != null ? data.duration : 5}" inputmode="numeric">
-      </div>
-      <div class="col-8 col-md-5">
-        <label class="form-label small mb-1">Activity / Details</label>
-        <input type="text" class="form-control form-control-sm cs-activity"
-               placeholder="e.g. Nomination & voting for new committee" value="${esc(data.activity||'')}">
-      </div>
-      <div class="col-9 col-md-4">
-        <label class="form-label small mb-1">Assigned To / Responsible</label>
-        ${memberPickerHTML(pid, data.person || '', true)}
-      </div>
-      <div class="col-3 col-md-1 text-end">
-        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 w-100"
-                onclick="this.closest('.cs-row').remove()">
-          <i class="bi bi-trash3"></i>
+    <div class="cs-row border rounded bg-white p-2 mb-2" style="border-color:#E8DAEF">
+      <div class="d-flex align-items-center mb-2">
+        <span class="badge rounded-pill cs-activity-label flex-grow-0" style="background:#6C3483">Activity</span>
+        <span class="flex-grow-1"></span>
+        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2"
+                onclick="removeCustomRow(this)">
+          <i class="bi bi-trash3 me-1"></i>Remove
         </button>
       </div>
+      <div class="row g-2">
+        <div class="col-4 col-md-2">
+          <label class="form-label small mb-1">Duration (min)</label>
+          <input type="number" class="form-control form-control-sm cs-duration"
+                 min="0" max="120" value="${data.duration != null ? data.duration : 5}" inputmode="numeric">
+        </div>
+        <div class="col-8 col-md-6">
+          <label class="form-label small mb-1">Activity / Details</label>
+          <textarea class="form-control form-control-sm cs-activity" rows="2"
+                    placeholder="Write more details about this activity">${esc(data.activity||'')}</textarea>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label small mb-1">Assigned To / Responsible</label>
+          ${memberPickerHTML(pid, data.person || '', true)}
+        </div>
+      </div>
     </div>`);
+  renumberActivities(n);
 }
 
 // ── Data collection ────────────────────────────────────────────────────────
