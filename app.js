@@ -274,6 +274,7 @@ let customSectionCount = 0;
 // A custom section is anchored *after* one of the agenda's fixed segments.
 // The keys are listed in agenda order and numbered so the placement is obvious.
 const CUSTOM_ANCHORS = [
+  { key: 'top',          label: '0 · Before meeting starts (top)' },
   { key: 'opening',      label: '1 · After meeting opening' },
   { key: 'prepared',     label: '2 · After prepared speeches' },
   { key: 'table_topics', label: '3 · After table topics' },
@@ -762,6 +763,7 @@ function buildAgendaRows(meeting, config) {
   }
 
   const rows = [];
+  pushCustomAfter('top');
   rows.push(seg('MEETING STARTS'));
   rows.push(row(2, 'Open Meeting, Play National Anthem & Invite the President', saa));
   rows.push(row(5, "President's Address and Official Start of the Meeting", president));
@@ -824,6 +826,10 @@ const A4W = 595.28;
 const LM  = 20 * MM;
 const RM  = 20 * MM;
 const BM  = 14 * MM;
+const TOPM = 48;     // page top margin. On page 2+ this region holds the "CONTINUED"
+                     // banner with breathing room above it (so it isn't cut when
+                     // printed) and a gap below it before the agenda table resumes.
+const BANNER_TOP = 14; // space above the continuation banner (page 2+)
 const contentW = A4W - LM - RM;   // 481.9 pt
 const LP_W  = 36 * MM;            // 102 pt
 const LP_GAP = 5 * MM;            // 14 pt
@@ -846,6 +852,52 @@ const ROW_COLORS_JS = {
   sub_header:   ['#F5E6E6', '#EED8D8'],
   custom:       ['#F4ECF7', '#EADAF0'],
 };
+
+// ── Vertical centering of agenda cells ─────────────────────────────────────
+// pdfmake 0.2.x has no vertical-align for table cells, so we center manually:
+// count how many lines each cell wraps to, then add a top margin to the shorter
+// cells equal to half the height difference. To count lines exactly the way
+// pdfmake will wrap them, we measure with pdfmake's own Roboto font on a canvas.
+const ROBOTO_LH = 1.1725;   // measured Roboto line-height factor (line advance / fontSize)
+let _measureCtx = null;
+let _robotoMeasureReady = false;
+
+async function ensureRobotoForMeasuring() {
+  if (_robotoMeasureReady || typeof FontFace === 'undefined') return;
+  try {
+    const vfs = (window.pdfMake && pdfMake.vfs) || {};
+    const defs = [['RobotoMeasure', 'Roboto-Regular.ttf'], ['RobotoMeasureBold', 'Roboto-Medium.ttf']];
+    await Promise.all(defs.map(async ([family, key]) => {
+      const b64 = vfs[key];
+      if (!b64) return;
+      const ff = new FontFace(family, 'url(data:font/ttf;base64,' + b64 + ')');
+      await ff.load();
+      document.fonts.add(ff);
+    }));
+    _robotoMeasureReady = true;
+  } catch (e) { /* fall back to a generic sans metric — still close enough */ }
+}
+
+// Number of wrapped lines `text` takes in `availPt` points at `fontSizePt`.
+function countWrappedLines(text, fontSizePt, availPt, bold) {
+  if (text == null || text === '') return 1;
+  if (!_measureCtx) _measureCtx = document.createElement('canvas').getContext('2d');
+  const fam = _robotoMeasureReady ? (bold ? 'RobotoMeasureBold' : 'RobotoMeasure') : 'sans-serif';
+  _measureCtx.font = (bold && !_robotoMeasureReady ? 'bold ' : '') + fontSizePt + 'px ' + fam;
+  let lines = 0;
+  String(text).split('\n').forEach(para => {
+    const words = para.split(/\s+/).filter(Boolean);
+    if (!words.length) { lines += 1; return; }
+    let cur = '';
+    words.forEach(w => {
+      const trial = cur ? cur + ' ' + w : w;
+      if (!cur || _measureCtx.measureText(trial).width <= availPt) cur = trial;
+      else { lines += 1; cur = w; }
+    });
+    lines += 1;
+  });
+  return Math.max(1, lines);
+}
 
 function buildPdfDefinition(meeting, config) {
   const club      = (config && config.club) || {};
@@ -878,9 +930,9 @@ function buildPdfDefinition(meeting, config) {
     hdrStack.push({ text: `MEETING LOCATION: ${location}`, fontSize: 9, color: '#E8D5D5', alignment: 'center', margin: [0,0,0,0] });
   }
 
-  // pageMargins top = 24pt; offset header up by -24 so the red band still starts at y=0
+  // Offset the header up by -TOPM so the red band still starts at y=0 on page 1
   const header = {
-    margin: [-LM, -24, -RM, 4*MM],
+    margin: [-LM, -TOPM, -RM, 4*MM],
     table: { widths: ['*'], body: [[{
       fillColor: '#AC1623',
       border: [false,false,false,false],
@@ -950,11 +1002,16 @@ function buildPdfDefinition(meeting, config) {
   if (sc) lpChildren.push(sc);
 
   // ── Agenda table ──────────────────────────────────────────────────────
+  // Header row: keep only the outer box border (left of TIME, right of ASSIGNED TO,
+  // plus top/bottom). The three interior vertical dividers are dropped here so no
+  // light-gray lines show against the dark-red header band. Body rows below keep
+  // their interior dividers. Because this is a repeating headerRow, the clean
+  // header carries to every continuation page automatically.
   const agendaBody = [[
-    { text:'TIME',            bold:true, fontSize:9, color:'white', fillColor:'#7C0E14', alignment:'center', margin:[2,4,2,4], border:[true,true,true,true] },
-    { text:'DURATION',        bold:true, fontSize:9, color:'white', fillColor:'#7C0E14', alignment:'center', margin:[2,4,2,4], border:[true,true,true,true], noWrap:true },
-    { text:'ACTIVITY / SPEECH',bold:true,fontSize:9, color:'white', fillColor:'#7C0E14', alignment:'center', margin:[2,4,2,4], border:[true,true,true,true] },
-    { text:'ASSIGNED TO',     bold:true, fontSize:9, color:'white', fillColor:'#7C0E14', alignment:'center', margin:[2,4,2,4], border:[true,true,true,true] },
+    { text:'TIME',        bold:true, fontSize:9, color:'white', fillColor:'#7C0E14', alignment:'center', margin:[2,4,2,4], border:[true,true,false,true] },
+    { text:'DURATION',    bold:true, fontSize:9, color:'white', fillColor:'#7C0E14', alignment:'center', margin:[2,4,2,4], border:[false,true,false,true], noWrap:true },
+    { text:'ACTIVITY',    bold:true, fontSize:9, color:'white', fillColor:'#7C0E14', alignment:'center', margin:[2,4,2,4], border:[false,true,false,true] },
+    { text:'ASSIGNED TO', bold:true, fontSize:9, color:'white', fillColor:'#7C0E14', alignment:'center', margin:[2,4,2,4], border:[false,true,true,true] },
   ]];
 
   let rowColorIdx = 0;
@@ -972,11 +1029,20 @@ function buildPdfDefinition(meeting, config) {
       const isBold   = ['speaker','sub_header'].includes(r.type);
       const timeStr  = r.time ? formatTime(r.time) : '';
       const durStr   = r.dur > 0 ? `${r.dur} min` : '—';
+      // Vertically center every cell: find the tallest cell in the row, then push
+      // shorter cells down by half the difference (top + bottom base margins are
+      // equal, so this lands the content dead-centre). Heights are lines × size × LH.
+      const hTime = 1                                                   * 8.5 * ROBOTO_LH;
+      const hDur  = 1                                                   * 8.5 * ROBOTO_LH;
+      const hAct  = countWrappedLines(r.act,    10,  CA - 5, isBold)    * 10  * ROBOTO_LH;
+      const hPer  = countWrappedLines(r.person, 9.5, CP - 4, false)     * 9.5 * ROBOTO_LH;
+      const Hmax  = Math.max(hTime, hDur, hAct, hPer);
+      const top   = (base, h) => base + (Hmax - h) / 2;
       agendaBody.push([
-        { text:timeStr,  bold:true, fontSize:8.5, color:'#AC1623', alignment:'center', fillColor:fill, margin:[2,2,2,2] },
-        { text:durStr,   fontSize:8.5, alignment:'center', fillColor:fill, margin:[2,2,2,2] },
-        { text:r.act,    bold:isBold,  fontSize:10, alignment:'left', fillColor:fill, margin:[3,2,2,2] },
-        { text:r.person, fontSize:9.5, color:'#555555', alignment:'center', fillColor:fill, margin:[2,2,2,2] },
+        { text:timeStr,  bold:true, fontSize:8.5, color:'#AC1623', alignment:'center', fillColor:fill, margin:[2, top(2,hTime), 2, 2] },
+        { text:durStr,   fontSize:8.5, alignment:'center', fillColor:fill, margin:[2, top(2,hDur), 2, 2] },
+        { text:r.act,    bold:isBold,  fontSize:10, alignment:'left', fillColor:fill, margin:[3, top(2,hAct), 2, 2] },
+        { text:r.person, fontSize:9.5, color:'#555555', alignment:'center', fillColor:fill, margin:[2, top(2,hPer), 2, 2] },
       ]);
     }
   });
@@ -1012,20 +1078,24 @@ function buildPdfDefinition(meeting, config) {
 
   return {
     pageSize: 'A4',
-    pageMargins: [LM, 24, RM, BM],
-    // Page 2+ gets a compact continuation banner in the 24pt top margin
+    pageMargins: [LM, TOPM, RM, BM],
+    // Page 2+ gets a compact continuation banner in the top margin. TOPM leaves a
+    // gap between this banner and the agenda table that resumes below it.
     header: function(currentPage) {
       if (currentPage === 1) return {};
       return {
-        margin: [LM + LP_W + LP_GAP, 6, RM, 0],
-        table: { widths: [RP_W], body: [[{
+        margin: [LM + LP_W + LP_GAP, BANNER_TOP, RM - 2, 0],
+        // Width RP_W+1.5 (and the trimmed right margin) makes the banner's right
+        // edge land on the agenda table's right border, so the two line up exactly.
+        table: { widths: [RP_W + 1.5], body: [[{
           fillColor: '#7C0E14',
           border: [false,false,false,false],
           text: clubName + '  —  MEETING AGENDA (CONTINUED)',
           fontSize: 8, bold: true, color: 'white',
           alignment: 'center', margin: [4, 6, 4, 6]
         }]] },
-        layout: { hLineWidth: ()=>0, vLineWidth: ()=>0 }
+        // Zero the default cell padding so the banner's box is exactly its declared width.
+        layout: { hLineWidth: ()=>0, vLineWidth: ()=>0, paddingLeft: ()=>0, paddingRight: ()=>0, paddingTop: ()=>0, paddingBottom: ()=>0 }
       };
     },
     content: [header, hlBox, body],
@@ -1037,7 +1107,7 @@ function buildPdfDefinition(meeting, config) {
 async function buildWordDoc(meeting, config) {
   const {
     Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun,
-    WidthType, AlignmentType, ShadingType, BorderStyle
+    WidthType, AlignmentType, ShadingType, BorderStyle, VerticalAlign
   } = docx;
 
   const club     = (config && config.club) || {};
@@ -1074,7 +1144,7 @@ async function buildWordDoc(meeting, config) {
 
   // Column header row
   tableRows.push(new TableRow({ children:
-    ['TIME','DURATION','ACTIVITY / SPEECH','ASSIGNED TO'].map((h, i) =>
+    ['TIME','DURATION','ACTIVITY','ASSIGNED TO'].map((h, i) =>
       new TableCell({
         width: { size: [W_T,W_D,W_A,W_P][i], type: WidthType.DXA },
         shading: cellShade('#7C0E14'),
@@ -1106,16 +1176,16 @@ async function buildWordDoc(meeting, config) {
       const durStr  = r.dur > 0 ? `${r.dur} min` : '—';
       const isBold  = ['speaker','sub_header'].includes(r.type);
       tableRows.push(new TableRow({ children: [
-        new TableCell({ width:{size:W_T,type:WidthType.DXA}, borders:thinBorder(),
+        new TableCell({ width:{size:W_T,type:WidthType.DXA}, borders:thinBorder(), verticalAlign:VerticalAlign.CENTER,
           children: [new Paragraph({ alignment:AlignmentType.CENTER,
             children:[new TextRun({text:timeStr, bold:true, color:'AC1623', size:17})] })] }),
-        new TableCell({ width:{size:W_D,type:WidthType.DXA}, borders:thinBorder(),
+        new TableCell({ width:{size:W_D,type:WidthType.DXA}, borders:thinBorder(), verticalAlign:VerticalAlign.CENTER,
           children: [new Paragraph({ alignment:AlignmentType.CENTER,
             children:[new TextRun({text:durStr, size:17})] })] }),
-        new TableCell({ width:{size:W_A,type:WidthType.DXA}, borders:thinBorder(),
+        new TableCell({ width:{size:W_A,type:WidthType.DXA}, borders:thinBorder(), verticalAlign:VerticalAlign.CENTER,
           children: [new Paragraph({
             children:[new TextRun({text:r.act, bold:isBold, size:20})] })] }),
-        new TableCell({ width:{size:W_P,type:WidthType.DXA}, borders:thinBorder(),
+        new TableCell({ width:{size:W_P,type:WidthType.DXA}, borders:thinBorder(), verticalAlign:VerticalAlign.CENTER,
           children: [new Paragraph({ alignment:AlignmentType.CENTER,
             children:[new TextRun({text:r.person, color:'555555', size:19})] })] }),
       ]}));
@@ -1170,6 +1240,9 @@ async function generateFiles() {
   const config  = collectConfigData();
 
   showToast('Generating files…', 'success');
+
+  // Load Roboto so cell line-counting (used for vertical centering) matches pdfmake
+  await ensureRobotoForMeasuring();
 
   // PDF
   try {

@@ -1,5 +1,7 @@
 # Lahore Toastmasters Agenda Generator
 
+🔗 **Live site:** https://aumohsin99.github.io/tmc-agenda-generator/
+
 A static web app that generates a formatted A4 meeting agenda as both a **PDF** and **Word (.docx)** file for Lahore Toastmasters Club. No backend, no installation — runs entirely in the browser.
 
 ---
@@ -106,7 +108,7 @@ Edit `meeting.json` to change the pre-filled meeting data shown to first-time vi
 - **Roles** — dropdowns populated from the members list; choose a name or select "Other…" to type a custom name. **Sergeant at Arms** defaults to whichever committee member holds that designation
 - **Prepared Speakers** — up to 10 speakers; each card has name, duration, evaluator, topic, and speech project/manual. The **Add Speaker** button sits at the bottom of the list so you can keep adding speakers without scrolling back up
 - **Table Topics** — facilitator name and session duration
-- **Custom Sections** — add extra agenda segments (e.g. Elections) on the fly. Each section has a customizable heading, an **anchor** that places it *after* any existing segment. The anchor dropdown is one agenda-ordered, sequentially numbered list of every place a section can go — the five fixed segments **and every other custom section** shown inline at its real position (e.g. if "Dance" sits after prepared speeches, then "3 · After Dance" appears right under "2 · After prepared speeches"). This lets you chain sections (place "Results" right after "Elections"); a section can't be anchored after itself or after one that already depends on it. Each section also has any number of rows with Duration / Activity / Assigned-To. The Assigned-To field is the same member picker used everywhere else (pick from the members list, or choose "Other…" to type any name). Start times chain automatically just like the built-in rows
+- **Custom Sections** — add extra agenda segments (e.g. Elections) on the fly. Each section has a customizable heading, an **anchor** that places it anywhere in the agenda — *before the meeting starts* (at the very top) or *after* any existing segment. The anchor dropdown is one agenda-ordered, sequentially numbered list of every place a section can go — the **before-meeting-starts** slot, the five fixed segments, **and every other custom section** shown inline at its real position (e.g. if "Dance" sits after prepared speeches, then "3 · After Dance" appears right under "2 · After prepared speeches"). This lets you chain sections (place "Results" right after "Elections"); a section can't be anchored after itself or after one that already depends on it. Each section also has any number of rows with Duration / Activity / Assigned-To. The Assigned-To field is the same member picker used everywhere else (pick from the members list, or choose "Other…" to type any name). Start times chain automatically just like the built-in rows
 
 ### Club Settings Tab
 
